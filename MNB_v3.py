@@ -32,10 +32,9 @@ except ImportError:
 # =========================
 TZ = ZoneInfo("Asia/Taipei")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-load_dotenv(os.path.join(BASE_DIR, ".env"))
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 if not OPENAI_API_KEY:
     raise ValueError("缺少 OPENAI_API_KEY，請在 .env 設定")
