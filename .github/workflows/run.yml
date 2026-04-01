@@ -2,7 +2,7 @@ name: Run Python Script
 
 on:
   schedule:
-    - cron: '0 22 * * *'  # 台灣早上6點
+    - cron: '0 22 * * *'   # 台灣早上 6 點
   workflow_dispatch:
 
 jobs:
@@ -15,20 +15,18 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Install Playwright
-        run: |
-          pip install playwright
-          playwright install
+      - name: Install Playwright browsers
+        run: python -m playwright install --with-deps chromium
 
       - name: Run script
         run: python MNB.py
