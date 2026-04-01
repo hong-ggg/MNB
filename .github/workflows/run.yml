@@ -38,11 +38,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add news_push_data/telegram/subscribers.xlsx
-          git add news_push_data/telegram/telegram_offset.txt
-          git add news_push_data/all_news/
-          git add news_push_data/master/
-          git add news_push_data/telegram/message.xlsx
+          git add news_push_data/
 
           git diff --cached --quiet || git commit -m "Auto update news data"
           git push
