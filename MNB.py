@@ -25,10 +25,6 @@ if not OPENAI_API_KEY:
     raise ValueError("缺少 OPENAI_API_KEY，請在 GitHub Secrets 或環境變數中設定")
 if not TELEGRAM_TOKEN:
     raise ValueError("缺少 TELEGRAM_TOKEN，請在 GitHub Secrets 或環境變數中設定")
-if not OPENAI_API_KEY:
-    raise ValueError("缺少 OPENAI_API_KEY，請在 .env 設定")
-if not TELEGRAM_TOKEN:
-    raise ValueError("缺少 TELEGRAM_TOKEN，請在 .env 設定")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 HEADERS = {"User-Agent": "Mozilla/5.0"}
@@ -548,7 +544,7 @@ def run_for_source(source_key: str, start_dt: datetime, end_dt: datetime):
         all_rows = crawl_cnyes(start_dt, end_dt)
     else:
         raise ValueError(f"不支援的來源: {source_key}")
-
+    
     save_master(source_key, all_rows)
     save_all_news_excel(source_key, cfg["platform"], all_rows)
 
