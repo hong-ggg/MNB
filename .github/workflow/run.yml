@@ -22,4 +22,4 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run script
-        run: MNB_v3
+        run: python MNB_v3
