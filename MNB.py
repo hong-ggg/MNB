@@ -544,7 +544,11 @@ def run_for_source(source_key: str, start_dt: datetime, end_dt: datetime):
         all_rows = crawl_cnyes(start_dt, end_dt)
     else:
         raise ValueError(f"不支援的來源: {source_key}")
-    
+
+    if not all_rows:
+        print(f"[INFO] {cfg['display_name']} 未抓到新聞，略過後續處理")
+        return
+
     save_master(source_key, all_rows)
     save_all_news_excel(source_key, cfg["platform"], all_rows)
 
