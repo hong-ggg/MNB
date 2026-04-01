@@ -2,8 +2,6 @@ import os
 import re
 import json
 import time
-import random
-import sys
 from datetime import datetime, timedelta
 from urllib.parse import urljoin
 from zoneinfo import ZoneInfo
@@ -15,26 +13,15 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from playwright.sync_api import sync_playwright
 
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-
-# 嘗試導入 undetected_chromedriver
-try:
-    import undetected_chromedriver as uc
-except ImportError:
-    print("❌ 錯誤：請先安裝 undetected-chromedriver (pip install undetected-chromedriver)")
-    sys.exit(1)
-
-
 # =========================
 # 基本設定
 # =========================
 TZ = ZoneInfo("Asia/Taipei")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 
 if not OPENAI_API_KEY:
     raise ValueError("缺少 OPENAI_API_KEY，請在 .env 設定")
@@ -44,14 +31,7 @@ if not TELEGRAM_TOKEN:
 client = OpenAI(api_key=OPENAI_API_KEY)
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-# 整合所有新聞來源
 SOURCES = {
-    "ctee": {
-        "platform": "工商時報",
-        "display_name": "工商時報國際",
-        "list_url": "https://www.ctee.com.tw/livenews/world",
-        "base_url": "https://www.ctee.com.tw",
-    },
     "cna": {
         "platform": "中央社",
         "display_name": "中央社國際",
@@ -74,7 +54,6 @@ OFFSET_FILE = os.path.join(TELEGRAM_DIR, "telegram_offset.txt")
 SUBSCRIBERS_FILE = os.path.join(TELEGRAM_DIR, "subscribers.xlsx")
 MESSAGE_FILE = os.path.join(TELEGRAM_DIR, "message.xlsx")
 
-# 建立相關資料夾
 for path in [DATA_DIR, ALL_NEWS_DIR, TELEGRAM_DIR, MASTER_DIR]:
     os.makedirs(path, exist_ok=True)
 for src in SOURCES:
@@ -87,15 +66,23 @@ for src in SOURCES:
 def now_taipei() -> datetime:
     return datetime.now(TZ)
 
+
 def today_yyyymmdd() -> str:
     return now_taipei().strftime("%Y%m%d")
+
 
 def now_str() -> str:
     return now_taipei().strftime("%Y-%m-%d %H:%M:%S")
 
+
 def normalize_text(text: str) -> str:
     text = (text or "").strip()
     return re.sub(r"\s+", " ", text)
+
+
+def ensure_parent(path: str):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
 
 def read_excel_or_empty(path: str, columns: list[str]) -> pd.DataFrame:
     if os.path.exists(path):
@@ -108,6 +95,7 @@ def read_excel_or_empty(path: str, columns: list[str]) -> pd.DataFrame:
         except Exception:
             pass
     return pd.DataFrame(columns=columns)
+
 
 def get_time_window():
     """
@@ -128,6 +116,7 @@ def get_time_window():
     end_dt = today_0600
     return start_dt, end_dt
 
+
 def save_master(source_key: str, rows: list[dict]):
     path = os.path.join(MASTER_DIR, f"{source_key}_master.xlsx")
     df_new = pd.DataFrame(rows)
@@ -142,6 +131,7 @@ def save_master(source_key: str, rows: list[dict]):
     df.to_excel(path, index=False)
     return df
 
+
 def save_all_news_excel(source_key: str, platform_name: str, rows: list[dict]):
     date_str = today_yyyymmdd()
     file_name = f"{date_str} {platform_name}新聞.xlsx"
@@ -152,6 +142,7 @@ def save_all_news_excel(source_key: str, platform_name: str, rows: list[dict]):
     df.to_excel(path, index=False)
     print(f"[INFO] 已輸出所有新聞 -> {path}")
     return path
+
 
 def select_top10(source_key: str, platform_name: str, rows: list[dict]) -> list[dict]:
     if not rows:
@@ -190,6 +181,7 @@ def select_top10(source_key: str, platform_name: str, rows: list[dict]) -> list[
                 新聞如下：
                 {json.dumps(news, ensure_ascii=False)}
                 """
+
     try:
         r = client.responses.create(model="gpt-5.4-nano", input=prompt)
         text = r.output_text.strip()
@@ -197,6 +189,7 @@ def select_top10(source_key: str, platform_name: str, rows: list[dict]) -> list[
     except Exception as e:
         print(f"[WARN] {source_key} GPT 選稿失敗，改用前10篇: {e}")
         return news[:10]
+
 
 def build_message(platform_name: str, start_dt: datetime, end_dt: datetime, top_rows: list[dict]) -> str:
     lines = [
@@ -220,14 +213,17 @@ def build_message(platform_name: str, start_dt: datetime, end_dt: datetime, top_
 # Telegram
 # =========================
 def load_offset():
-    if not os.path.exists(OFFSET_FILE): return None
+    if not os.path.exists(OFFSET_FILE):
+        return None
     with open(OFFSET_FILE, "r", encoding="utf-8") as f:
         raw = f.read().strip()
     return int(raw) if raw else None
 
+
 def save_offset(offset: int):
     with open(OFFSET_FILE, "w", encoding="utf-8") as f:
         f.write(str(offset))
+
 
 def get_updates():
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
@@ -242,6 +238,7 @@ def get_updates():
     if not data.get("ok"):
         raise RuntimeError(f"Telegram getUpdates 失敗: {data}")
     return data.get("result", [])
+
 
 def update_subscribers():
     columns = [
@@ -258,17 +255,20 @@ def update_subscribers():
 
     for upd in updates:
         msg = upd.get("message") or upd.get("edited_message")
-        if not msg: continue
+        if not msg:
+            continue
 
         chat = msg.get("chat", {})
         chat_id = str(chat.get("id", "")).strip()
-        if not chat_id: continue
+        if not chat_id:
+            continue
 
         text = str(msg.get("text", "")).strip()
         ts = now_taipei()
         is_new = "Y" if chat_id not in existing_ids else "N"
 
-        if is_new == "Y": existing_ids.add(chat_id)
+        if is_new == "Y":
+            existing_ids.add(chat_id)
 
         new_rows.append({
             "join_date": ts.strftime("%Y-%m-%d"),
@@ -289,22 +289,26 @@ def update_subscribers():
     save_offset(max(u["update_id"] for u in updates) + 1)
     return subs_df
 
+
 def get_unique_chat_ids_from_subscribers() -> list[str]:
     columns = [
         "join_date", "join_time", "chat_id", "chat_type", "username",
         "first_name", "last_name", "message_text", "is_new_subscriber"
     ]
     subs_df = read_excel_or_empty(SUBSCRIBERS_FILE, columns)
-    if subs_df.empty: return []
+    if subs_df.empty:
+        return []
     ids = subs_df["chat_id"].astype(str).str.strip()
     ids = ids[ids != ""]
     return ids.drop_duplicates().tolist()
+
 
 def send_telegram_message(chat_id: str, text: str):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {"chat_id": chat_id, "text": text}
     r = requests.post(url, data=payload, timeout=30)
     r.raise_for_status()
+
 
 def append_message_log(date_str: str, platform_name: str, message_text: str):
     columns = ["date", "platform", "message"]
@@ -318,6 +322,7 @@ def append_message_log(date_str: str, platform_name: str, message_text: str):
         }])
     ], ignore_index=True)
     df.to_excel(MESSAGE_FILE, index=False)
+
 
 def push_to_all_subscribers(platform_name: str, message_text: str):
     chat_ids = get_unique_chat_ids_from_subscribers()
@@ -334,129 +339,7 @@ def push_to_all_subscribers(platform_name: str, message_text: str):
 
 
 # =========================
-# 工商時報 (CTEE) 爬蟲
-# =========================
-def start_ctee_browser():
-    print("🛠️  【CTEE】正在初始化瀏覽器...")
-    options = uc.ChromeOptions()
-    options.add_argument("--window-size=1280,800")
-
-    driver = uc.Chrome(
-        options=options,
-        version_main=146,
-        use_subprocess=True
-    )
-
-    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
-        "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
-    })
-    return driver
-
-def crawl_ctee(start_dt: datetime, end_dt: datetime) -> list[dict]:
-    cfg = SOURCES["ctee"]
-    driver = None
-    results = []
-    seen_urls = set()
-
-    try:
-        driver = start_ctee_browser()
-        
-        print("✅ 【CTEE】瀏覽器進程啟動成功，等待 2 秒緩衝...")
-        time.sleep(2) 
-        
-        wait = WebDriverWait(driver, 20)
-        print(f"🌐 【CTEE】開啟網頁：{cfg['list_url']}")
-        driver.get(cfg["list_url"])
-
-        click_count = 0
-
-        while True:
-            time.sleep(1.5)
-            date_tags = driver.find_elements(By.CSS_SELECTOR, ".news-date")
-            time_tags = driver.find_elements(By.CSS_SELECTOR, ".news-time")
-
-            if not date_tags or not time_tags:
-                print("⏳ 【CTEE】尚未偵測到內容，重試中...")
-                time.sleep(2)
-                continue
-
-            try:
-                last_dt_naive = datetime.strptime(
-                    f"{date_tags[-1].text.strip()} {time_tags[-1].text.strip()}",
-                    "%Y.%m.%d %H:%M"
-                )
-                last_dt = last_dt_naive.replace(tzinfo=TZ)
-                print(f"📡 【CTEE】頁面最舊新聞時間：{last_dt.strftime('%Y-%m-%d %H:%M')}")
-            except Exception as e:
-                print(f"[WARN] CTEE 最末時間解析失敗: {e}")
-                break
-
-            if last_dt < start_dt:
-                print(f"🛑 【CTEE】已抓到早於起始時間 {start_dt.strftime('%Y-%m-%d %H:%M')} 的資料，停止載入更多")
-                break
-
-            try:
-                more_btn = wait.until(EC.element_to_be_clickable((By.ID, "moreBtn")))
-                print(f"🖱️  【CTEE】點擊『載入更多』(第 {click_count + 1} 次)")
-                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", more_btn)
-                time.sleep(0.5)
-                driver.execute_script("arguments[0].click();", more_btn)
-
-                click_count += 1
-                wait_time = random.uniform(2.5, 4.0)
-                print(f"⏳ 【CTEE】等待 {wait_time:.2f} 秒")
-                time.sleep(wait_time)
-            except Exception:
-                print("ℹ️  【CTEE】無法再點擊更多按鈕，可能已到底部")
-                break
-
-        print("🔍 【CTEE】開始提取符合區間的新聞")
-        cards = driver.find_elements(By.CSS_SELECTOR, ".newslist__card")
-
-        for card in cards:
-            try:
-                title_el = card.find_element(By.CSS_SELECTOR, ".news-title a")
-                d_str = card.find_element(By.CSS_SELECTOR, ".news-date").text.strip()
-                t_str = card.find_element(By.CSS_SELECTOR, ".news-time").text.strip()
-                news_dt = datetime.strptime(f"{d_str} {t_str}", "%Y.%m.%d %H:%M").replace(tzinfo=TZ)
-
-                title = normalize_text(title_el.text.strip())
-                url = title_el.get_attribute("href")
-
-                if not title or not url or url in seen_urls:
-                    continue
-
-                if start_dt <= news_dt <= end_dt:
-                    results.append({
-                        "platform": cfg["platform"],
-                        "title": title,
-                        "time_text": news_dt.strftime("%Y-%m-%d %H:%M"),
-                        "published_at": news_dt.isoformat(),
-                        "url": url,
-                    })
-                    seen_urls.add(url)
-            except Exception:
-                continue
-
-    finally:
-        if driver:
-            print("🚪 【CTEE】關閉瀏覽器")
-            try:
-                driver.quit()
-            except:
-                pass
-            
-            try:
-                driver.__class__.__del__ = lambda self: None
-            except Exception:
-                pass
-
-    results.sort(key=lambda x: x["published_at"], reverse=True)
-    return results
-
-
-# =========================
-# 中央社 (CNA) 爬蟲
+# 中央社
 # =========================
 def crawl_cna(start_dt: datetime, end_dt: datetime) -> list[dict]:
     cfg = SOURCES["cna"]
@@ -519,7 +402,7 @@ def crawl_cna(start_dt: datetime, end_dt: datetime) -> list[dict]:
 
 
 # =========================
-# 鉅亨網 (CNYES) 爬蟲
+# 鉅亨網
 # =========================
 def fetch_html(url: str) -> str | None:
     try:
@@ -529,6 +412,7 @@ def fetch_html(url: str) -> str | None:
     except Exception as e:
         print(f"[抓文章失敗] {url} -> {e}")
         return None
+
 
 def parse_cnyes_article_datetime_and_title(url: str):
     html = fetch_html(url)
@@ -573,6 +457,7 @@ def parse_cnyes_article_datetime_and_title(url: str):
                 published_dt = None
 
     return published_dt, title
+
 
 def crawl_cnyes(start_dt: datetime, end_dt: datetime) -> list[dict]:
     cfg = SOURCES["cnyes"]
@@ -655,18 +540,12 @@ def run_for_source(source_key: str, start_dt: datetime, end_dt: datetime):
     print(f"[TIME RANGE] {start_dt.strftime('%Y-%m-%d %H:%M')} ~ {end_dt.strftime('%Y-%m-%d %H:%M')}")
     print("=" * 80)
 
-    if source_key == "ctee":
-        all_rows = crawl_ctee(start_dt, end_dt)
-    elif source_key == "cna":
+    if source_key == "cna":
         all_rows = crawl_cna(start_dt, end_dt)
     elif source_key == "cnyes":
         all_rows = crawl_cnyes(start_dt, end_dt)
     else:
         raise ValueError(f"不支援的來源: {source_key}")
-
-    if not all_rows:
-        print(f"📭 {cfg['display_name']} 未抓到新聞")
-        return
 
     save_master(source_key, all_rows)
     save_all_news_excel(source_key, cfg["platform"], all_rows)
@@ -684,8 +563,7 @@ def main():
     start_dt, end_dt = get_time_window()
 
     print("[STEP 2] 分網站抓新聞、輸出 Excel、記錄訊息並推播...")
-    # 依序執行三個新聞來源的爬取與推播
-    for source_key in ["ctee", "cna", "cnyes"]:
+    for source_key in ["cna", "cnyes"]:
         try:
             run_for_source(source_key, start_dt, end_dt)
         except Exception as e:
