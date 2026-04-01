@@ -1,0 +1,9 @@
+pandas
+openpyxl
+requests
+beautifulsoup4
+python-dotenv
+openai
+playwright
+selenium
+undetected-chromedriver
