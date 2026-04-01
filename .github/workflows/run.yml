@@ -2,7 +2,7 @@ name: Run Python Script
 
 on:
   schedule:
-    - cron: '30 8 * * *'   # 台灣 16:30（測試用）
+    - cron: '32 9 * * *'   # 台灣 17:32（測試用）
   workflow_dispatch:
 
 jobs:
